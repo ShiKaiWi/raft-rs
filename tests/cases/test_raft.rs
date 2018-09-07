@@ -208,7 +208,6 @@ impl Interface {
             for &id in ids {
                 if prs.learner_ids().contains(&id) {
                     let progress = Progress {
-                        is_learner: true,
                         ..Default::default()
                     };
                     if let Err(e) = self.mut_prs().insert_learner(id, progress) {
@@ -3994,12 +3993,12 @@ fn test_restore_with_learner() {
 
     for &node in s.get_metadata().get_conf_state().get_nodes() {
         assert!(sm.prs().get(node).is_some());
-        assert!(!sm.prs().get(node).unwrap().is_learner);
+        assert!(!sm.prs().has_learner(node));
     }
 
     for &node in s.get_metadata().get_conf_state().get_learners() {
         assert!(sm.prs().get(node).is_some());
-        assert!(sm.prs().get(node).unwrap().is_learner);
+        assert!(sm.prs().has_learner(node));
     }
 
     assert!(!sm.restore(s));
@@ -4079,7 +4078,7 @@ fn test_add_learner() {
         n1.prs().learner_ids().iter().cloned().collect::<Vec<_>>(),
         vec![2]
     );
-    assert!(n1.prs().get(2).unwrap().is_learner);
+    assert!(n1.prs().learner_ids().contains(&2));
 }
 
 // TestRemoveLearner tests that removeNode could update nodes and
