@@ -3993,12 +3993,12 @@ fn test_restore_with_learner() {
 
     for &node in s.get_metadata().get_conf_state().get_nodes() {
         assert!(sm.prs().get(node).is_some());
-        assert!(!sm.prs().has_learner(node));
+        assert!(!sm.prs().learner_ids().contains(&node));
     }
 
     for &node in s.get_metadata().get_conf_state().get_learners() {
         assert!(sm.prs().get(node).is_some());
-        assert!(sm.prs().has_learner(node));
+        assert!(sm.prs().learner_ids().contains(&node));
     }
 
     assert!(!sm.restore(s));
