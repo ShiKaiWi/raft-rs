@@ -89,7 +89,7 @@ impl ProgressSet {
     pub fn voters(&self) -> impl Iterator<Item = (&u64, &Progress)> {
         self.progress
             .iter()
-            .filter(move |(k, _)| self.configuration.voters.contains(k))
+            .filter(move |(&k, _)| self.has_voter(k))
     }
 
     /// Returns the status of learners.
@@ -97,25 +97,25 @@ impl ProgressSet {
     pub fn learners(&self) -> impl Iterator<Item = (&u64, &Progress)> {
         self.progress
             .iter()
-            .filter(move |(k, _)| self.configuration.learners.contains(k))
+            .filter(move |(&k, _)| self.has_learner(k))
     }
 
     /// Returns the mutable status of voters.
     #[inline]
     pub fn voters_mut(&mut self) -> impl Iterator<Item = (&u64, &mut Progress)> {
-        let configuration = &self.configuration;
+        let set = self.voter_ids().cloned().collect::<FxHashSet<_>>();
         self.progress
             .iter_mut()
-            .filter(move |(k, _)| configuration.voters.contains(k))
+            .filter(move |(&k, _)| set.contains(&k))
     }
 
     /// Returns the mutable status of learners.
     #[inline]
     pub fn learners_mut(&mut self) -> impl Iterator<Item = (&u64, &mut Progress)> {
-        let configuration = &self.configuration;
+        let set = self.learner_ids().cloned().collect::<FxHashSet<_>>();
         self.progress
             .iter_mut()
-            .filter(move |(k, _)| configuration.learners.contains(k))
+            .filter(move |(&k, _)| set.contains(&k))
     }
 
     /// Returns if the progress set contains a voter by the given id.
