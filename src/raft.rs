@@ -356,7 +356,7 @@ impl<T: Storage> Raft<T> {
     }
 
     fn quorum(&self) -> usize {
-        quorum(self.prs().num_voters())
+        quorum(self.prs().voter_ids().len())
     }
 
     /// For testing leader lease
@@ -584,7 +584,7 @@ impl<T: Storage> Raft<T> {
     pub fn maybe_commit(&mut self) -> bool {
         let mut mis_arr = [0; 5];
         let mut mis_vec;
-        let voters = self.prs().num_voters();
+        let voters = self.prs().voter_ids().len();
         let mis = if voters <= 5 {
             &mut mis_arr[..voters]
         } else {
@@ -1328,7 +1328,7 @@ impl<T: Storage> Raft<T> {
                 self.handle_append_response(m, &mut prs, old_paused, send_append, maybe_commit);
             }
             MessageType::MsgHeartbeatResponse => {
-                let quorum = quorum(prs.voters().count());
+                let quorum = quorum(prs.voter_ids().len());
                 self.handle_heartbeat_response(m, &mut prs, quorum, send_append, more_to_send);
             }
             MessageType::MsgSnapStatus => {
@@ -1382,7 +1382,7 @@ impl<T: Storage> Raft<T> {
                 if m.get_entries().is_empty() {
                     panic!("{} stepped empty MsgProp", self.tag);
                 }
-                if !self.prs().has_voter(self.id) {
+                if !self.prs().voter_ids().contains(&self.id) {
                     // If we are not currently a member of the range (i.e. this node
                     // was removed from the configuration while serving as leader),
                     // drop any new proposals.
@@ -1798,7 +1798,7 @@ impl<T: Storage> Raft<T> {
 
         let nodes = meta.get_conf_state().get_nodes();
         let learners = meta.get_conf_state().get_learners();
-        self.prs = Some(ProgressSet::new());
+        self.prs = Some(ProgressSet::with_capacity(nodes.len(), learners.len()));
 
         for &(is_learner, nodes) in &[(false, nodes), (true, learners)] {
             for &n in nodes {
@@ -1850,7 +1850,7 @@ impl<T: Storage> Raft<T> {
     /// Indicates whether state machine can be promoted to leader,
     /// which is true when its own id is in progress list.
     pub fn promotable(&self) -> bool {
-        self.prs().has_voter(self.id)
+        self.prs().voter_ids().contains(&self.id)
     }
 
     fn add_voter_or_learner(&mut self, id: u64, learner: bool) {
@@ -1868,7 +1868,7 @@ impl<T: Storage> Raft<T> {
 
         let result = if learner {
             self.mut_prs().insert_learner(id, progress)
-        } else if self.prs().has_learner(id) {
+        } else if self.prs().learner_ids().contains(&id) {
             self.mut_prs().promote_learner(id)
         } else {
             self.mut_prs().insert_voter(id, progress)
@@ -1898,11 +1898,10 @@ impl<T: Storage> Raft<T> {
 
     /// Removes a node from the raft.
     pub fn remove_node(&mut self, id: u64) {
-        debug!("Removing node with id {}", id);
         self.mut_prs().remove(id);
 
         // do not try to commit or abort transferring if there are no nodes in the cluster.
-        if self.prs().voters().count() == 0 && self.prs().learners().count() == 0 {
+        if self.prs().voter_ids().is_empty() && self.prs().learner_ids().is_empty() {
             return;
         }
 

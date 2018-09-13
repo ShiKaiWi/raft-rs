@@ -206,7 +206,7 @@ impl Interface {
             let prs = self.take_prs();
             self.set_prs(ProgressSet::new());
             for &id in ids {
-                if prs.has_learner(id) {
+                if prs.learner_ids().contains(&id) {
                     let progress = Progress {
                         is_learner: true,
                         ..Default::default()
@@ -1447,7 +1447,7 @@ fn test_commit() {
         let mut sm = new_test_raft(1, vec![1], 5, 1, store);
         for (j, &v) in matches.iter().enumerate() {
             let id = j as u64 + 1;
-            if !sm.prs().has_peer(id) {
+            if !sm.prs().get(id).is_some() {
                 sm.set_progress(id, v, v + 1, false);
             }
         }
@@ -3050,7 +3050,7 @@ fn test_restore() {
         s.get_metadata().get_term()
     );
     assert_eq!(
-        sm.prs().voter_ids().cloned().collect::<HashSet<_>>(),
+        sm.prs().voter_ids().iter().cloned().collect::<HashSet<_>>(),
         s.get_metadata()
             .get_conf_state()
             .get_nodes()
@@ -3156,7 +3156,7 @@ fn test_slow_node_restore() {
     }
     next_ents(&mut nt.peers.get_mut(&1).unwrap(), &nt.storage[&1]);
     let mut cs = ConfState::new();
-    cs.set_nodes(nt.peers[&1].prs().voter_ids().cloned().collect());
+    cs.set_nodes(nt.peers[&1].prs().voter_ids().iter().cloned().collect());
     nt.storage[&1]
         .wl()
         .create_snapshot(nt.peers[&1].raft_log.applied, Some(cs), vec![])
@@ -3265,7 +3265,7 @@ fn test_add_node() {
     let mut r = new_test_raft(1, vec![1], 10, 1, new_storage());
     r.add_node(2);
     assert_eq!(
-        r.prs().voter_ids().cloned().collect::<HashSet<_>>(),
+        r.prs().voter_ids().iter().cloned().collect::<HashSet<_>>(),
         vec![1, 2].into_iter().collect()
     );
 }
@@ -3307,11 +3307,14 @@ fn test_remove_node() {
     setup_for_test();
     let mut r = new_test_raft(1, vec![1, 2], 10, 1, new_storage());
     r.remove_node(2);
-    assert_eq!(r.prs().voter_ids().cloned().collect::<Vec<_>>(), vec![1]);
+    assert_eq!(
+        r.prs().voter_ids().iter().cloned().collect::<Vec<_>>(),
+        vec![1]
+    );
 
     // remove all nodes from cluster
     r.remove_node(1);
-    assert_eq!(r.prs().voter_ids().count(), 0);
+    assert_eq!(r.prs().voter_ids().len(), 0);
 }
 
 #[test]
@@ -3341,7 +3344,7 @@ fn test_raft_nodes() {
     ];
     for (i, (ids, wids)) in tests.drain(..).enumerate() {
         let r = new_test_raft(1, ids, 10, 1, new_storage());
-        let voter_ids = r.prs().voter_ids().cloned().collect::<HashSet<_>>();
+        let voter_ids = r.prs().voter_ids().iter().cloned().collect::<HashSet<_>>();
         let wids = wids.into_iter().collect();
         if voter_ids != wids {
             panic!("#{}: nodes = {:?}, want {:?}", i, voter_ids, wids);
@@ -3536,7 +3539,7 @@ fn test_leader_transfer_after_snapshot() {
     nt.send(vec![new_message(1, 1, MessageType::MsgPropose, 1)]);
     next_ents(&mut nt.peers.get_mut(&1).unwrap(), &nt.storage[&1]);
     let mut cs = ConfState::new();
-    cs.set_nodes(nt.peers[&1].prs().voter_ids().cloned().collect());
+    cs.set_nodes(nt.peers[&1].prs().voter_ids().iter().cloned().collect());
     nt.storage[&1]
         .wl()
         .create_snapshot(nt.peers[&1].raft_log.applied, Some(cs), vec![])
@@ -4072,7 +4075,10 @@ fn test_add_learner() {
     let mut n1 = new_test_raft(1, vec![1], 10, 1, new_storage());
     n1.add_learner(2);
 
-    assert_eq!(n1.prs().learner_ids().cloned().collect::<Vec<_>>(), vec![2]);
+    assert_eq!(
+        n1.prs().learner_ids().iter().cloned().collect::<Vec<_>>(),
+        vec![2]
+    );
     assert!(n1.prs().get(2).unwrap().is_learner);
 }
 
@@ -4083,12 +4089,18 @@ fn test_remove_learner() {
     setup_for_test();
     let mut n1 = new_test_learner_raft(1, vec![1], vec![2], 10, 1, new_storage());
     n1.remove_node(2);
-    assert_eq!(n1.prs().voter_ids().cloned().collect::<Vec<_>>(), vec![1]);
-    assert_eq!(n1.prs().learner_ids().cloned().collect::<Vec<_>>(), vec![]);
+    assert_eq!(
+        n1.prs().voter_ids().iter().cloned().collect::<Vec<_>>(),
+        vec![1]
+    );
+    assert_eq!(
+        n1.prs().learner_ids().iter().cloned().collect::<Vec<_>>(),
+        vec![]
+    );
 
     n1.remove_node(1);
-    assert_eq!(n1.prs().voter_ids().count(), 0);
-    assert_eq!(n1.prs().learner_ids().count(), 0);
+    assert_eq!(n1.prs().voter_ids().len(), 0);
+    assert_eq!(n1.prs().learner_ids().len(), 0);
 }
 
 // simulate rolling update a cluster for Pre-Vote. cluster has 3 nodes [n1, n2, n3].
